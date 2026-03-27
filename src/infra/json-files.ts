@@ -36,10 +36,7 @@ export async function writeTextAtomic(
   const mode = options?.mode ?? 0o600;
   const payload =
     options?.appendTrailingNewline && !content.endsWith("\n") ? `${content}\n` : content;
-
-  let lastError: Error | undefined;
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
     const mkdirOptions: { recursive: true; mode?: number } = { recursive: true };
     if (typeof options?.ensureDirMode === "number") {
       mkdirOptions.mode = options.ensureDirMode;
