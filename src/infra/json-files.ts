@@ -75,7 +75,6 @@ export async function writeTextAtomic(
       }
       return;
     } catch (err: any) {
-      lastError = err;
       // Windows EPERM error on rename indicates file lock contention
       if (err.code === "EPERM" && attempt < MAX_RETRIES) {
         const delay = Math.pow(2, attempt) * RETRY_BASE_DELAY_MS;
