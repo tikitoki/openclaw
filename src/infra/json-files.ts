@@ -5,6 +5,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 const MAX_RETRIES = 5;
 const RETRY_BASE_DELAY_MS = 50;
+const IS_WINDOWS = process.platform === "win32";
 
 export async function readJsonFile<T>(filePath: string): Promise<T | null> {
   try {
@@ -36,13 +37,13 @@ export async function writeTextAtomic(
   const mode = options?.mode ?? 0o600;
   const payload =
     options?.appendTrailingNewline && !content.endsWith("\n") ? `${content}\n` : content;
+  const mkdirOptions: { recursive: true; mode?: number } = { recursive: true };
+  if (typeof options?.ensureDirMode === "number") {
+    mkdirOptions.mode = options.ensureDirMode;
+  }
+  const parentDir = path.dirname(filePath);
   for (let attempt = 1; attempt <= MAX_RETRIES + 1; attempt++) {
-    const mkdirOptions: { recursive: true; mode?: number } = { recursive: true };
-    if (typeof options?.ensureDirMode === "number") {
-      mkdirOptions.mode = options.ensureDirMode;
-    }
-    await fs.mkdir(path.dirname(filePath), mkdirOptions);
-    const parentDir = path.dirname(filePath);
+    await fs.mkdir(parentDir, mkdirOptions);
     const tmp = `${filePath}.${randomUUID()}.tmp`;
     try {
       const tmpHandle = await fs.open(tmp, "w", mode);
@@ -74,10 +75,17 @@ export async function writeTextAtomic(
         // best-effort; ignore on platforms without chmod
       }
       return;
-    } catch (err: any) {
-      // Windows EPERM error on rename indicates file lock contention
-      if (err.code === "EPERM" && attempt < MAX_RETRIES) {
-        const delay = Math.pow(2, attempt) * RETRY_BASE_DELAY_MS;
+    } catch (err) {
+      // Only retry on Windows; other platforms should fail fast
+      if (
+        IS_WINDOWS &&
+        err &&
+        typeof err === "object" &&
+        "code" in err &&
+        err.code === "EPERM" &&
+        attempt < MAX_RETRIES + 1
+      ) {
+        const delay = 2 ** attempt * RETRY_BASE_DELAY_MS;
         await sleep(delay);
         continue;
       }
